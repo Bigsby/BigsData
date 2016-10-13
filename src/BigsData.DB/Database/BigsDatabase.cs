@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -95,9 +96,15 @@ namespace BigsData.Database
             return ReadItem<T>(filePath);
         }
 
-        public Task<IEnumerable<T>> Query<T>(string collection = null, string database = null) where T : class, new()
+        public IEnumerable<Task<T>> Query<T>(string collection = null, string database = null) where T : class, new()
         {
-            throw new NotImplementedException();
+            var path = BuildCollectionPath(database, collection);
+
+            if (!Directory.Exists(path))
+                if (_failSilently)
+                    return new Task<T>[0];
+
+            return Directory.EnumerateFiles(path).Select(async file => await ReadItem<T>(file));
         }
         #endregion
 
