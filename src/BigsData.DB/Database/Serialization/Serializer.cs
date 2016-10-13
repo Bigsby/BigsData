@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+﻿using fastJSON;
 
 namespace BigsData.Database.Serialization
 {
@@ -6,12 +6,13 @@ namespace BigsData.Database.Serialization
     {
         public static string Serialize(object item)
         {
-            return JsonConvert.SerializeObject(item);
+            
+            return JSON.ToJSON(item);
         }
 
         public static T Deserialize<T>(string json)
         {
-            return JsonConvert.DeserializeObject<T>(json);
+            return JSON.ToObject<T>(json);
         }
     }
 }

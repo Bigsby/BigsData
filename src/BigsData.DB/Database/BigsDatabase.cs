@@ -14,98 +14,100 @@ namespace BigsData.Database
         private readonly string _defaultDatabase;
         private readonly string _defaultCollection;
         private readonly bool _failSilently;
+        private readonly bool _trackReferences;
         private const string _guidFormat = "N";
         private static readonly Encoding _encoding = Encoding.UTF8;
+        private readonly IDictionary<WeakReference, ItemReference> _references;
 
-        internal BigsDatabase(string baseFolder, string defaultDatabase = Constants.DefaultDatabaseName, string defaultCollection = Constants.DefaultCollectionName, bool failSilentlyOnReads = true)
+        internal BigsDatabase(string baseFolder, string defaultDatabase = Constants.DefaultDatabaseName, string defaultCollection = Constants.DefaultCollectionName, bool failSilentlyOnReads = true, bool trackReferences = false)
         {
             _rootFolder = baseFolder;
             _defaultDatabase = defaultDatabase;
             _defaultCollection = defaultCollection;
             _failSilently = failSilentlyOnReads;
+            _trackReferences = trackReferences;
+            _references = new Dictionary<WeakReference, ItemReference>();
         }
 
         #region Public methods
         #region Create
-        public async Task<ItemOperationResult<Guid>> Add<T>(T item, string collection = null, string database = null) where T : class, new()
+        public async Task<ItemOperationResult> Add<T>(T item, string collection = null, string database = null) where T : class, new()
         {
-            var id = Guid.NewGuid();
-            var idString = id.ToString(_guidFormat);
+            var id = NewId();
 
-            var result = await AddItem(idString, item, collection, database);
-
-            if (result)
-                return ItemOperationResult.Sucessful(id);
-
-            return ItemOperationResult.Failed<Guid>(result);
+            return await Add(id, item, collection, database);
         }
 
-        public async Task<ItemOperationResult<Guid>> Add<T>(Guid id, T item, string collection = null, string database = null) where T : class, new()
+        public async Task<ItemOperationResult> Add<T>(string id, T item, string collection = null, string database = null) where T : class, new()
         {
-            var idString = id.ToString(_guidFormat);
-
-            var result = await AddItem(idString, item, collection, database);
-
-            if (result)
-                return ItemOperationResult.Sucessful(id);
-
-            return ItemOperationResult.Failed<Guid>(result);
+            return await Task.Run(() => AddInt(id, item, collection, database, 
+                async fileStream =>
+                {
+                    var json = Serializer.Serialize(item);
+                    var bytesToWrite = _encoding.GetBytes(json);
+                    await fileStream.WriteAsync(bytesToWrite, 0, bytesToWrite.Length);
+                })); 
         }
 
-        public async Task<ItemOperationResult<string>> Add<T>(string id, T item, string collection = null, string database = null) where T : class, new()
+        public async Task<ItemOperationResult> Add(Stream stream, string collection = null, string database = null)
         {
-            var result = await AddItem(id, item, collection, database);
-
-            if (result)
-                return ItemOperationResult.Sucessful(id);
-
-            return ItemOperationResult.Failed<string>(result);
+            var id = NewId();
+            return await AddStream(id, stream, collection, database);
         }
 
-        public Task<ItemOperationResult<Guid>> Add(Stream stream, string collection = null, string database = null)
+        public async Task<ItemOperationResult> AddStream(string id, Stream stream, string collection = null, string database = null)
         {
-            return Task.FromResult(ItemOperationResult.Failed<Guid>(DatabaseException.NotImplemented));
-        }
-
-        public ItemOperationResult<Guid> Add(Guid id, Stream stream, string collection = null, string database = null)
-        {
-            return ItemOperationResult.Failed<Guid>(DatabaseException.NotImplemented);
-        }
-
-        public Task<ItemOperationResult<string>> Add(string id, Stream stream, string collection = null, string database = null)
-        {
-            return Task.FromResult(ItemOperationResult.Failed<string>(DatabaseException.NotImplemented));
+            return await Task.Run(() => AddInt(id, stream, collection, database, 
+                async fileStream => await stream.CopyToAsync(fileStream)));
         }
         #endregion
 
         #region Read
-        public Task<T> Single<T>(Guid id, string collection = null, string database = null) where T : class, new()
-        {
-            return Single<T>(id.ToString(_guidFormat), collection, database);
-        }
-
         public Task<T> Single<T>(string id, string collection = null, string database = null) where T : class, new()
         {
-            var filePath = BuildItemPath(database, collection, id);
-            if (!File.Exists(filePath))
+            var itemReference = BuildItemReference(id, collection, database);
+
+            if (!File.Exists(itemReference.RootFullPath))
                 if (_failSilently)
                     return Task.FromResult(default(T));
                 else
-                    throw new ItemNotFoundException(filePath);
+                    throw new ItemNotFoundException(itemReference.FullPath);
 
-            return ReadItem<T>(filePath);
+            return ReadItem<T>(itemReference);
         }
 
-        public IEnumerable<Task<T>> Query<T>(string collection = null, string database = null) where T : class, new()
+        public IEnumerable<T> Query<T>(string collection = null, string database = null) where T : class, new()
         {
-            var path = BuildCollectionPath(database, collection);
+            var reference = BuildItemReference(null, collection, database);
 
-            if (!Directory.Exists(path))
+            if (!Directory.Exists(reference.RootCollectionPath))
                 if (_failSilently)
-                    return new Task<T>[0];
+                    return new T[0];
 
-            return Directory.EnumerateFiles(path).Select(async file => await ReadItem<T>(file));
+            return Directory.EnumerateFiles(reference.RootCollectionPath)
+                .Select(file => 
+                ReadItem<T>(
+                    new ItemReference(
+                        _rootFolder,
+                        reference.Database,
+                        reference.Collection,
+                        Path.GetFileName(file)
+                    )).Result);
         }
+
+        public Stream GetSteam(string id, string collection = null, string database = null)
+        {
+            var itemReference = BuildItemReference(id, collection, database);
+            
+            if (!File.Exists(itemReference.RootFullPath))
+                if (_failSilently)
+                    return Stream.Null;
+                else
+                    throw new ItemNotFoundException(itemReference.FullPath);
+
+            return File.OpenRead(itemReference.RootFullPath);
+        }
+
         #endregion
 
         #region Update
@@ -151,17 +153,78 @@ namespace BigsData.Database
             throw new NotImplementedException();
         }
         #endregion
+
+        #region Item Reference
+        public string GetId<T>(T item) where T : class, new()
+        {
+            if (!_trackReferences)
+                if (_failSilently)
+                    return null;
+                else throw new InvalidDatabaseOperationException("References not tracked. Check contructor parameters.");
+
+            string id;
+            if (TryGetId(item, out id))
+                return id;
+
+            if (_failSilently)
+                return null;
+            else throw new InvalidDatabaseOperationException("Item Id not found.");
+        }
+
+        public bool TryGetId<T>(T item, out string id) where T : class, new()
+        {
+            var reference = _references.Keys.FirstOrDefault(wr => wr.Target == item);
+
+            id = reference == null ? null : _references[reference].Id;
+
+            return !string.IsNullOrEmpty(id);
+        }
+
+        public ItemReference GetReference<T>(T item) where T : class, new()
+        {
+            if (!_trackReferences)
+                if (_failSilently)
+                    return ItemReference.Emtpy;
+                else throw new InvalidDatabaseOperationException("References not tracked. Check contructor parameters.");
+
+            ItemReference reference;
+            if (TryGetReference(item, out reference))
+                return reference;
+
+            if (_failSilently)
+                return ItemReference.Emtpy;
+            else throw new InvalidDatabaseOperationException("Item reference not found.");
+        }
+
+        public bool TryGetReference<T>(T item, out ItemReference itemReference) where T : class, new()
+        {
+            var reference = _references.Keys.FirstOrDefault(wr => wr.Target == item);
+
+            itemReference = reference == null ? ItemReference.Emtpy : _references[reference];
+
+            return !itemReference.IsEmpty;
+        } 
+        #endregion
         #endregion
 
         #region Private methods
-        private OperationResult GuaranteeFileSystemStructure(string database, string collection)
+        private static string NewId()
         {
-            var path = BuildCollectionPath(database, collection);
+            return Guid.NewGuid().ToString(_guidFormat);
+        }
 
+        private void AddReference<T>(T item, ItemReference itemReference)
+        {
+            if (_trackReferences)
+                _references.Add(new WeakReference(item, false), itemReference);
+        }
+
+        private OperationResult GuaranteeFileSystemStructure(ItemReference reference)
+        {
             try
             {
-                if (!Directory.Exists(path))
-                    Directory.CreateDirectory(path);
+                if (!Directory.Exists(reference.RootCollectionPath))
+                    Directory.CreateDirectory(reference.RootCollectionPath);
 
                 return OperationResult.Successful;
             }
@@ -171,52 +234,51 @@ namespace BigsData.Database
             }
         }
 
-        private async Task<OperationResult> AddItem<T>(string id, T item, string collection, string database)
+        private ItemOperationResult AddInt<T>(string id, T item, string collection, string database, Action<FileStream> process)
         {
-            var pathCreated = GuaranteeFileSystemStructure(database, collection);
+            var itemReference = BuildItemReference(id, collection, database);
+            if (File.Exists(itemReference.RootFullPath))
+                return ItemOperationResult.Failed(new ItemAlreadyExistsException(itemReference.FullPath));
+
+            var pathCreated = GuaranteeFileSystemStructure(itemReference);
 
             if (!pathCreated)
-                return pathCreated;
+                return ItemOperationResult.Failed(pathCreated);
 
-            var filePath = BuildItemPath(database, collection, id);
+            try
+            {
+                using (var fileStream = File.OpenWrite(itemReference.RootFullPath))
+                    process(fileStream);
 
-            if (File.Exists(filePath))
-                return OperationResult.Failed(new ItemAlreadyExistsException(filePath));
-
-            var json = Serializer.Serialize(item);
-            var bytesToWrite = _encoding.GetBytes(json);
-
-            using (var fileStream = File.OpenWrite(filePath))
-                await fileStream.WriteAsync(bytesToWrite, 0, bytesToWrite.Length);
-
-            return OperationResult.Successful;
+                AddReference(item, itemReference);
+                return ItemOperationResult.Sucessful(id);
+            }
+            catch (Exception ex)
+            {
+                return ItemOperationResult.Failed(new DatabaseException($"Faled to add stream '{itemReference.FullPath}'", ex));
+            }
         }
 
-        private async Task<T> ReadItem<T>(string path)
+        private async Task<T> ReadItem<T>(ItemReference itemReference)
         {
-            using (var fileStream = File.OpenRead(path))
+            using (var fileStream = File.OpenRead(itemReference.RootFullPath))
             {
                 var bytesRead = new byte[fileStream.Length];
                 await fileStream.ReadAsync(bytesRead, 0, (int)fileStream.Length);
                 var json = _encoding.GetString(bytesRead);
-                return Serializer.Deserialize<T>(json);
+
+                var result = Serializer.Deserialize<T>(json);
+                AddReference(result, itemReference);
+                return result;
             }
         }
 
-        private string BuildCollectionPath(string database, string collection)
+        private ItemReference BuildItemReference(string id, string collection, string database)
         {
-            return Path.Combine(
+            return new ItemReference(
                 _rootFolder,
-                Constants.DatabasesFolder,
                 string.IsNullOrEmpty(database) ? _defaultDatabase : database,
-                Constants.CollectionsFolder,
-                string.IsNullOrEmpty(collection) ? _defaultCollection : collection);
-        }
-
-        private string BuildItemPath(string database, string collection, string id)
-        {
-            return Path.Combine(
-                BuildCollectionPath(database, collection),
+                string.IsNullOrEmpty(collection) ? _defaultCollection : collection,
                 id);
         }
         #endregion

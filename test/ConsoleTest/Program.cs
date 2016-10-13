@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using static System.Console;
 
 namespace ConsoleTest
@@ -10,16 +11,26 @@ namespace ConsoleTest
             var db = BigsData.DB.Open("data");
             var item = new Item
             {
-                Name = "John Cleese",
-                Birthday = new DateTime(1939, 10, 27)
+                Name = "Eric Idle",
+                Birthday = new DateTime(1943, 3, 29)
             };
 
             var result = db.Add(item).Result;
 
+            WriteLine("Single:");
             var itemRead = db.Single<Item>(result.ItemId).Result;
-            WriteLine($"Item: {itemRead.Name} - {item.Birthday}");
+            WriteLine($"Item: {itemRead.Name} - {itemRead.Birthday}");
+
+            WriteLine("Query:");
+            foreach (var listItem in db.Query<Item>())
+                WriteLine($"Item: {listItem.Name} - {listItem.Birthday} - {db.GetId(listItem)}");
+
+            WriteLine("Query with filter:");
+            foreach (var listItem in db.Query<Item>().Where(i => i.Name.Contains("E")))
+                WriteLine($"Item: {listItem.Name} - {listItem.Birthday}");
 
             WriteLine("Done!");
+
             ReadLine();
         }
     }

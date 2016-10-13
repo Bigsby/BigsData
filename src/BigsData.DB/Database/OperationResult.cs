@@ -29,37 +29,24 @@
         }
     }
 
-    internal static class ItemOperationResult
+    public class ItemOperationResult : OperationResult
     {
-        public static ItemOperationResult<T> Sucessful<T>(T itemId)
-        {
-            return ItemOperationResult<T>.Successful(itemId);
-        }
-
-        public static ItemOperationResult<T> Failed<T>(DatabaseException ex)
-        {
-            return ItemOperationResult<T>.Failed(ex);
-        }
-    }
-
-    public sealed class ItemOperationResult<T> : OperationResult
-    {
-        private ItemOperationResult(T itemId, bool success = true, DatabaseException exception = null)
+        public ItemOperationResult(string id, bool success = true, DatabaseException exception = null)
             : base(success, exception)
         {
-            ItemId = itemId;
+            ItemId = id;
         }
 
-        public T ItemId { get; private set; }
+        public string ItemId { get; private set; }
 
-        internal static new ItemOperationResult<T> Successful(T itemId)
+        internal static ItemOperationResult Sucessful(string id)
         {
-            return new ItemOperationResult<T>(itemId);
+            return new ItemOperationResult(id);
         }
 
-        internal static new ItemOperationResult<T> Failed(DatabaseException exception)
+        public static new ItemOperationResult Failed(DatabaseException ex)
         {
-            return new ItemOperationResult<T>(default(T), false, exception);
+            return new ItemOperationResult(null, false, ex);
         }
     }
 }

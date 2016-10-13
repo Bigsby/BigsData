@@ -5,7 +5,7 @@ namespace BigsData.Database
     public class DatabaseException : Exception
     {
         internal DatabaseException(string message, Exception ex)
-            :base(message, ex)
+            : base(message, ex)
         { }
 
         internal DatabaseException(string message)
@@ -30,9 +30,14 @@ namespace BigsData.Database
     public class ItemNotFoundException : DatabaseException
     {
         internal ItemNotFoundException(string path)
-            : base ($"'{path}' not found.")
-        {
+            : base($"'{path}' not found.")
+        { }
+    }
 
-        }
+    public class InvalidDatabaseOperationException : DatabaseException
+    {
+        public InvalidDatabaseOperationException(string message)
+            : base(message)
+        { }
     }
 }
