@@ -9,8 +9,7 @@ namespace BigsData.Database
         private readonly string _baseFolder;
         private readonly string _defaultDatabase;
         private readonly string _defaultCollection;
-
-        #region Create
+        
         internal BigsDatabase(string baseFolder, string defaultDatabase = Constants.DefaultDatabaseName, string defaultCollection = Constants.DefaultCollectionName)
         {
             _baseFolder = baseFolder;
@@ -18,6 +17,7 @@ namespace BigsData.Database
             _defaultCollection = defaultCollection;
         }
 
+        #region Create
         public ItemOperationResult<Guid> Add<T>(T item, string collection = null, string database = null) where T : class, new()
         {
             throw new NotImplementedException();
