@@ -22,6 +22,24 @@
         {
             return result.Success;
         }
+
+        public static implicit operator DatabaseException(OperationResult result)
+        {
+            return result.Exception;
+        }
+    }
+
+    internal static class ItemOperationResult
+    {
+        public static ItemOperationResult<T> Sucessful<T>(T itemId)
+        {
+            return ItemOperationResult<T>.Successful(itemId);
+        }
+
+        public static ItemOperationResult<T> Failed<T>(DatabaseException ex)
+        {
+            return ItemOperationResult<T>.Failed(ex);
+        }
     }
 
     public sealed class ItemOperationResult<T> : OperationResult
@@ -39,9 +57,9 @@
             return new ItemOperationResult<T>(itemId);
         }
 
-        internal static ItemOperationResult<T> Failed(T itemId, DatabaseException exception)
+        internal static new ItemOperationResult<T> Failed(DatabaseException exception)
         {
-            return new ItemOperationResult<T>(itemId, false, exception);
+            return new ItemOperationResult<T>(default(T), false, exception);
         }
     }
 }

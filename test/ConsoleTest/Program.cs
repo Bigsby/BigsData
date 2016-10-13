@@ -1,4 +1,5 @@
 ﻿using System;
+using static System.Console;
 
 namespace ConsoleTest
 {
@@ -13,9 +14,13 @@ namespace ConsoleTest
                 Birthday = new DateTime(1939, 10, 27)
             };
 
-            var id = db.Add(item);
+            var result = db.Add(item).Result;
 
-            db.
+            var itemRead = db.Single<Item>(result.ItemId).Result;
+            WriteLine($"Item: {itemRead.Name} - {item.Birthday}");
+
+            WriteLine("Done!");
+            ReadLine();
         }
     }
 

@@ -6,6 +6,5 @@ namespace BigsData.Database.Metadata
     {
         public string CollectionName { get; set; }
         public Type ItemType { get; set; }
-        public string Folder { get; set; }
     }
 }
