@@ -10,43 +10,46 @@ namespace BigsData.Database
         private readonly string _defaultDatabase;
         private readonly string _defaultCollection;
 
-        internal BigsDatabase(string baseFolder, string defaultDatabase = "database", string defaultCollection = "collection")
+        #region Create
+        internal BigsDatabase(string baseFolder, string defaultDatabase = Constants.DefaultDatabaseName, string defaultCollection = Constants.DefaultCollectionName)
         {
             _baseFolder = baseFolder;
             _defaultDatabase = defaultDatabase;
             _defaultCollection = defaultCollection;
         }
 
-        public Guid Add<T>(T item, string collection = null, string database = null) where T : class, new()
+        public ItemOperationResult<Guid> Add<T>(T item, string collection = null, string database = null) where T : class, new()
         {
             throw new NotImplementedException();
         }
 
-        public bool Add<T>(Guid id, T item, string collection = null, string database = null) where T : class, new()
+        public ItemOperationResult<Guid> Add<T>(Guid id, T item, string collection = null, string database = null) where T : class, new()
         {
             throw new NotImplementedException();
         }
 
-        public bool Add<T>(string id, T item, string collection = null, string database = null) where T : class, new()
+        public ItemOperationResult<string> Add<T>(string id, T item, string collection = null, string database = null) where T : class, new()
         {
             throw new NotImplementedException();
         }
 
-        public Guid Add(Stream stream, string collection = null, string database = null)
+        public ItemOperationResult<Guid> Add(Stream stream, string collection = null, string database = null)
         {
             throw new NotImplementedException();
         }
 
-        public bool Add(Guid id, Stream stream, string collection = null, string database = null)
+        public ItemOperationResult<Guid> Add(Guid id, Stream stream, string collection = null, string database = null)
         {
             throw new NotImplementedException();
         }
 
-        public bool Add(string id, Stream stream, string collection = null, string database = null)
+        public ItemOperationResult<string> Add(string id, Stream stream, string collection = null, string database = null)
         {
             throw new NotImplementedException();
         }
+        #endregion
 
+        #region Read
         public T Single<T>(Guid id, string collection = null, string database = null) where T : class, new()
         {
             throw new NotImplementedException();
@@ -61,45 +64,50 @@ namespace BigsData.Database
         {
             throw new NotImplementedException();
         }
+        #endregion
 
-        public bool Update<T>(Guid id, T item, string collection = null, string database = null) where T : class, new()
+        #region Update
+        public OperationResult Update<T>(Guid id, T item, string collection = null, string database = null) where T : class, new()
         {
             throw new NotImplementedException();
         }
 
-        public bool Update<T>(string id, T item, string collection = null, string database = null) where T : class, new()
+        public OperationResult Update<T>(string id, T item, string collection = null, string database = null) where T : class, new()
         {
             throw new NotImplementedException();
         }
 
-        public bool Update(Guid id, Stream stream, string collection = null, string database = null)
+        public OperationResult Update(Guid id, Stream stream, string collection = null, string database = null)
         {
             throw new NotImplementedException();
         }
 
-        public bool Update(string id, Stream stream, string collection = null, string database = null)
+        public OperationResult Update(string id, Stream stream, string collection = null, string database = null)
+        {
+            throw new NotImplementedException();
+        }
+        #endregion
+
+        #region Delete
+        public OperationResult Delete<T>(Guid id, string collection = null, string database = null) where T : class, new()
         {
             throw new NotImplementedException();
         }
 
-        public bool Delete<T>(Guid id, string collection = null, string database = null) where T : class, new()
+        public OperationResult Delete<T>(string id, string collection = null, string database = null) where T : class, new()
         {
             throw new NotImplementedException();
         }
 
-        public bool Delete<T>(string id, string collection = null, string database = null) where T : class, new()
+        public OperationResult Delete(Guid id, string collection = null, string database = null)
         {
             throw new NotImplementedException();
         }
 
-        public bool Delete(Guid id, string collection = null, string database = null)
+        public OperationResult Delete(string id, string collection = null, string database = null)
         {
             throw new NotImplementedException();
-        }
-
-        public bool Delete(string id, string collection = null, string database = null)
-        {
-            throw new NotImplementedException();
-        }
+        } 
+        #endregion
     }
 }
