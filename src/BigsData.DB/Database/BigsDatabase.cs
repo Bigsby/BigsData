@@ -42,8 +42,7 @@ namespace BigsData.Database
 
         public async Task<ItemOperationResult> Add<T>(string id, T item, string collection = null, string database = null) where T : class, new()
         {
-            return await AddInt(id, item, collection, database,
-                async fileStream => await SerializeItemToFile(fileStream, item));
+            return await AddInt(id, item, collection, database, SerializeItemToFile);
         }
 
         public async Task<ItemOperationResult> Add(Stream stream, string collection = null, string database = null)
@@ -54,8 +53,7 @@ namespace BigsData.Database
 
         public async Task<ItemOperationResult> AddStream(string id, Stream stream, string collection = null, string database = null)
         {
-            return await AddInt(id, stream, collection, database,
-                async fileStream => await CopyStreamToFile(fileStream, stream));
+            return await AddInt(id, stream, collection, database, CopyStreamToFile);
         }
         #endregion
 
@@ -111,7 +109,7 @@ namespace BigsData.Database
         {
             var itemReference = BuildItemReference(id, collection, database);
 
-            return await UpdateInt(itemReference, item, async fileStream => await SerializeItemToFile(fileStream, item));
+            return await UpdateInt(itemReference, item, SerializeItemToFile);
         }
 
         public async Task<OperationResult> Update<T>(T item, string collection = null, string database = null) where T : class, new()
@@ -124,11 +122,41 @@ namespace BigsData.Database
             return OperationResult.Failed(new ItenNotFoundException(id));
         }
 
+        public async Task<OperationResult> AddOrUpdate<T>(T item, string collection = null, string database = null) where T : class, new()
+        {
+            string id;
+
+            if (TryGetId(item, out id))
+                return await Update(id, item, collection, database);
+
+            return await Add(item, collection, database);
+        }
+
+        public async Task<OperationResult> AddOrUpdate<T>(string id, T item, string collection = null, string database = null) where T : class, new()
+        {
+            var itemReference = BuildItemReference(id, collection, database);
+
+            if (File.Exists(itemReference.RootFullPath))
+                return await UpdateInt(itemReference, item, SerializeItemToFile);
+
+            return await AddInt(itemReference, item, SerializeItemToFile);
+        }
+
+        public async Task<OperationResult> AddOrUpdateStream(string id, Stream stream, string collection = null, string database = null)
+        {
+            var itemReference = BuildItemReference(id, collection, database);
+
+            if (File.Exists(itemReference.RootFullPath))
+                return await UpdateInt(itemReference, stream, CopyStreamToFile);
+
+            return await AddInt(itemReference, stream, CopyStreamToFile);
+        }
+
         public async Task<OperationResult> UpdateStream(string id, Stream stream, string collection = null, string database = null)
         {
             var itemReference = BuildItemReference(id, collection, database);
 
-            return await UpdateInt(itemReference, stream, async fileStream => await CopyStreamToFile(fileStream, stream));
+            return await UpdateInt(itemReference, stream, CopyStreamToFile);
         }
         #endregion
 
@@ -256,14 +284,14 @@ namespace BigsData.Database
             await stream.CopyToAsync(fileStream);
         }
 
-        private async Task<ItemOperationResult> AddInt<T>(string id, T item, string collection, string database, Func<FileStream, Task> process)
+        private async Task<ItemOperationResult> AddInt<T>(string id, T item, string collection, string database, Func<FileStream, T, Task> process)
         {
             var itemReference = BuildItemReference(id, collection, database);
 
             return await AddInt(itemReference, item, process);
         }
 
-        private async Task<ItemOperationResult> AddInt<T>(ItemReference itemReference, T item, Func<FileStream, Task> process)
+        private async Task<ItemOperationResult> AddInt<T>(ItemReference itemReference, T item, Func<FileStream, T, Task> process)
         {
             if (File.Exists(itemReference.RootFullPath))
                 return ItemOperationResult.Failed(new ItemAlreadyExistsException(itemReference.FullPath));
@@ -276,7 +304,7 @@ namespace BigsData.Database
             try
             {
                 using (var fileStream = File.OpenWrite(itemReference.RootFullPath))
-                    await process(fileStream);
+                    await process(fileStream, item);
 
                 AddReference(item, itemReference);
                 return ItemOperationResult.Sucessful(itemReference.Id);
@@ -302,7 +330,7 @@ namespace BigsData.Database
             }
         }
 
-        private async Task<OperationResult> UpdateInt<T>(ItemReference itemReference, T item, Func<FileStream, Task> process)
+        private async Task<OperationResult> UpdateInt<T>(ItemReference itemReference, T item, Func<FileStream, T, Task> process)
         {
             if (File.Exists(itemReference.RootFullPath))
             {
