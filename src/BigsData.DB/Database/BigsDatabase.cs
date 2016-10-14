@@ -29,6 +29,11 @@ namespace BigsData.Database
             _references = new Dictionary<WeakReference, ItemReference>();
         }
 
+        private async Task Go(Func<Task> proc)
+        {
+            await proc();
+        }
+
         #region Public methods
         #region Create
         public async Task<ItemOperationResult> Add<T>(T item, string collection = null, string database = null) where T : class, new()
@@ -40,13 +45,13 @@ namespace BigsData.Database
 
         public async Task<ItemOperationResult> Add<T>(string id, T item, string collection = null, string database = null) where T : class, new()
         {
-            return await Task.Run(() => AddInt(id, item, collection, database, 
+            return await AddInt(id, item, collection, database, 
                 async fileStream =>
                 {
                     var json = Serializer.Serialize(item);
                     var bytesToWrite = _encoding.GetBytes(json);
                     await fileStream.WriteAsync(bytesToWrite, 0, bytesToWrite.Length);
-                })); 
+                }); 
         }
 
         public async Task<ItemOperationResult> Add(Stream stream, string collection = null, string database = null)
@@ -57,8 +62,8 @@ namespace BigsData.Database
 
         public async Task<ItemOperationResult> AddStream(string id, Stream stream, string collection = null, string database = null)
         {
-            return await Task.Run(() => AddInt(id, stream, collection, database, 
-                async fileStream => await stream.CopyToAsync(fileStream)));
+            return await AddInt(id, stream, collection, database, 
+                async fileStream => await stream.CopyToAsync(fileStream));
         }
         #endregion
 
@@ -107,7 +112,6 @@ namespace BigsData.Database
 
             return File.OpenRead(itemReference.RootFullPath);
         }
-
         #endregion
 
         #region Update
@@ -234,7 +238,7 @@ namespace BigsData.Database
             }
         }
 
-        private ItemOperationResult AddInt<T>(string id, T item, string collection, string database, Action<FileStream> process)
+        private async Task<ItemOperationResult> AddInt<T>(string id, T item, string collection, string database, Func<FileStream, Task> process)
         {
             var itemReference = BuildItemReference(id, collection, database);
             if (File.Exists(itemReference.RootFullPath))
@@ -248,7 +252,7 @@ namespace BigsData.Database
             try
             {
                 using (var fileStream = File.OpenWrite(itemReference.RootFullPath))
-                    process(fileStream);
+                    await process(fileStream);
 
                 AddReference(item, itemReference);
                 return ItemOperationResult.Sucessful(id);
