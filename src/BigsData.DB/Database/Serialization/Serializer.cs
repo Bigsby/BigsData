@@ -12,7 +12,14 @@ namespace BigsData.Database.Serialization
 
         public static T Deserialize<T>(string json)
         {
-            return JSON.ToObject<T>(json);
+            try
+            {
+                return JSON.ToObject<T>(json);
+            }
+            catch
+            {
+                return default(T);
+            }
         }
     }
 }

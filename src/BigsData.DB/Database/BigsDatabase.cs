@@ -10,6 +10,7 @@ namespace BigsData.Database
 {
     public class BigsDatabase
     {
+        #region Private fields
         private readonly string _rootFolder;
         private readonly string _defaultDatabase;
         private readonly string _defaultCollection;
@@ -18,8 +19,9 @@ namespace BigsData.Database
         private const string _guidFormat = "N";
         private static readonly Encoding _encoding = Encoding.UTF8;
         private readonly IDictionary<WeakReference, ItemReference> _references;
+        #endregion
 
-        internal BigsDatabase(string baseFolder, string defaultDatabase = Constants.DefaultDatabaseName, string defaultCollection = Constants.DefaultCollectionName, bool failSilentlyOnReads = true, bool trackReferences = false)
+        internal BigsDatabase(string baseFolder, string defaultDatabase, string defaultCollection, bool failSilentlyOnReads, bool trackReferences)
         {
             _rootFolder = baseFolder;
             _defaultDatabase = defaultDatabase;
@@ -27,11 +29,6 @@ namespace BigsData.Database
             _failSilently = failSilentlyOnReads;
             _trackReferences = trackReferences;
             _references = new Dictionary<WeakReference, ItemReference>();
-        }
-
-        private async Task Go(Func<Task> proc)
-        {
-            await proc();
         }
 
         #region Public methods
@@ -45,13 +42,8 @@ namespace BigsData.Database
 
         public async Task<ItemOperationResult> Add<T>(string id, T item, string collection = null, string database = null) where T : class, new()
         {
-            return await AddInt(id, item, collection, database, 
-                async fileStream =>
-                {
-                    var json = Serializer.Serialize(item);
-                    var bytesToWrite = _encoding.GetBytes(json);
-                    await fileStream.WriteAsync(bytesToWrite, 0, bytesToWrite.Length);
-                }); 
+            return await AddInt(id, item, collection, database,
+                async fileStream => await SerializeItemToFile(fileStream, item));
         }
 
         public async Task<ItemOperationResult> Add(Stream stream, string collection = null, string database = null)
@@ -62,8 +54,8 @@ namespace BigsData.Database
 
         public async Task<ItemOperationResult> AddStream(string id, Stream stream, string collection = null, string database = null)
         {
-            return await AddInt(id, stream, collection, database, 
-                async fileStream => await stream.CopyToAsync(fileStream));
+            return await AddInt(id, stream, collection, database,
+                async fileStream => await CopyStreamToFile(fileStream, stream));
         }
         #endregion
 
@@ -90,20 +82,20 @@ namespace BigsData.Database
                     return new T[0];
 
             return Directory.EnumerateFiles(reference.RootCollectionPath)
-                .Select(file => 
+                .Select(file =>
                 ReadItem<T>(
                     new ItemReference(
                         _rootFolder,
                         reference.Database,
                         reference.Collection,
                         Path.GetFileName(file)
-                    )).Result);
+                    )).Result).Where(item => default(T) != item);
         }
 
         public Stream GetSteam(string id, string collection = null, string database = null)
         {
             var itemReference = BuildItemReference(id, collection, database);
-            
+
             if (!File.Exists(itemReference.RootFullPath))
                 if (_failSilently)
                     return Stream.Null;
@@ -115,50 +107,64 @@ namespace BigsData.Database
         #endregion
 
         #region Update
-        public Task<OperationResult> Update<T>(Guid id, T item, string collection = null, string database = null) where T : class, new()
+        public async Task<OperationResult> Update<T>(string id, T item, string collection = null, string database = null) where T : class, new()
         {
-            throw new NotImplementedException();
+            var itemReference = BuildItemReference(id, collection, database);
+
+            return await UpdateInt(itemReference, item, async fileStream => await SerializeItemToFile(fileStream, item));
         }
 
-        public Task<OperationResult> Update<T>(string id, T item, string collection = null, string database = null) where T : class, new()
+        public async Task<OperationResult> Update<T>(T item, string collection = null, string database = null) where T : class, new()
         {
-            throw new NotImplementedException();
+            string id;
+
+            if (TryGetId(item, out id))
+                return await Update(id, item, collection, database);
+
+            return OperationResult.Failed(new ItenNotFoundException(id));
         }
 
-        public Task<OperationResult> Update(Guid id, Stream stream, string collection = null, string database = null)
+        public async Task<OperationResult> UpdateStream(string id, Stream stream, string collection = null, string database = null)
         {
-            throw new NotImplementedException();
-        }
+            var itemReference = BuildItemReference(id, collection, database);
 
-        public Task<OperationResult> Update(string id, Stream stream, string collection = null, string database = null)
-        {
-            throw new NotImplementedException();
+            return await UpdateInt(itemReference, stream, async fileStream => await CopyStreamToFile(fileStream, stream));
         }
         #endregion
 
         #region Delete
-        public Task<OperationResult> Delete<T>(Guid id, string collection = null, string database = null) where T : class, new()
+        public OperationResult Delete<T>(T item, string collection = null, string database = null) where T : class, new()
         {
-            throw new NotImplementedException();
+            ItemReference itemReference;
+            if (TryGetReference(item, out itemReference))
+                return DeleteInt(itemReference);
+
+            return OperationResult.Failed(new ItenNotFoundException(itemReference.FullPath));
         }
 
-        public Task<OperationResult> Delete<T>(string id, string collection = null, string database = null) where T : class, new()
+        public OperationResult Delete(string id, string collection = null, string database = null)
         {
-            throw new NotImplementedException();
-        }
+            var itemReference = BuildItemReference(id, collection, database);
 
-        public Task<OperationResult> Delete(Guid id, string collection = null, string database = null)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<OperationResult> Delete(string id, string collection = null, string database = null)
-        {
-            throw new NotImplementedException();
+            return DeleteInt(itemReference);
         }
         #endregion
 
         #region Item Reference
+        public bool Exists(string id, string collection = null, string database = null)
+        {
+            var itemReference = BuildItemReference(id, collection, database);
+            return File.Exists(itemReference.RootFullPath);
+        }
+
+        public bool Exists<T>(T item, string collection = null, string database = null) where T : class, new()
+        {
+            string id;
+            if (TryGetId(item, out id))
+                return Exists(id, collection, database);
+            return false;
+        }
+
         public string GetId<T>(T item) where T : class, new()
         {
             if (!_trackReferences)
@@ -207,7 +213,7 @@ namespace BigsData.Database
             itemReference = reference == null ? ItemReference.Emtpy : _references[reference];
 
             return !itemReference.IsEmpty;
-        } 
+        }
         #endregion
         #endregion
 
@@ -238,9 +244,27 @@ namespace BigsData.Database
             }
         }
 
+        private async Task SerializeItemToFile<T>(FileStream fileStream, T item)
+        {
+            var json = Serializer.Serialize(item);
+            var bytesToWrite = _encoding.GetBytes(json);
+            await fileStream.WriteAsync(bytesToWrite, 0, bytesToWrite.Length);
+        }
+
+        private async Task CopyStreamToFile(FileStream fileStream, Stream stream)
+        {
+            await stream.CopyToAsync(fileStream);
+        }
+
         private async Task<ItemOperationResult> AddInt<T>(string id, T item, string collection, string database, Func<FileStream, Task> process)
         {
             var itemReference = BuildItemReference(id, collection, database);
+
+            return await AddInt(itemReference, item, process);
+        }
+
+        private async Task<ItemOperationResult> AddInt<T>(ItemReference itemReference, T item, Func<FileStream, Task> process)
+        {
             if (File.Exists(itemReference.RootFullPath))
                 return ItemOperationResult.Failed(new ItemAlreadyExistsException(itemReference.FullPath));
 
@@ -255,7 +279,7 @@ namespace BigsData.Database
                     await process(fileStream);
 
                 AddReference(item, itemReference);
-                return ItemOperationResult.Sucessful(id);
+                return ItemOperationResult.Sucessful(itemReference.Id);
             }
             catch (Exception ex)
             {
@@ -263,7 +287,7 @@ namespace BigsData.Database
             }
         }
 
-        private async Task<T> ReadItem<T>(ItemReference itemReference)
+        private async Task<T> ReadItem<T>(ItemReference itemReference) where T : class, new()
         {
             using (var fileStream = File.OpenRead(itemReference.RootFullPath))
             {
@@ -272,9 +296,37 @@ namespace BigsData.Database
                 var json = _encoding.GetString(bytesRead);
 
                 var result = Serializer.Deserialize<T>(json);
-                AddReference(result, itemReference);
+                if (default(T) != result)
+                    AddReference(result, itemReference);
                 return result;
             }
+        }
+
+        private async Task<OperationResult> UpdateInt<T>(ItemReference itemReference, T item, Func<FileStream, Task> process)
+        {
+            if (File.Exists(itemReference.RootFullPath))
+            {
+                var deleteResult = DeleteInt(itemReference);
+                if (!deleteResult)
+                    return deleteResult;
+
+                return await AddInt(itemReference, item, process);
+
+            }
+            return OperationResult.Failed(new ItemNotFoundException(itemReference.FullPath));
+        }
+
+        private OperationResult DeleteInt(ItemReference itemReference)
+        {
+            if (itemReference.IsEmpty)
+                return OperationResult.Failed(new InvalidArgumentException($"Incomplete data on Delete item: {itemReference.FullPath}"));
+
+            if (File.Exists(itemReference.RootFullPath))
+            {
+                File.Delete(itemReference.RootFullPath);
+                return OperationResult.Successful;
+            }
+            return OperationResult.Failed(new ItenNotFoundException(itemReference.FullPath));
         }
 
         private ItemReference BuildItemReference(string id, string collection, string database)

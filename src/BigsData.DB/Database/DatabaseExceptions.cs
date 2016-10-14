@@ -40,4 +40,20 @@ namespace BigsData.Database
             : base(message)
         { }
     }
+
+    public class InvalidArgumentException : DatabaseException
+    {
+        public InvalidArgumentException(string message)
+            : base(message)
+        { }
+    }
+
+    public class ItenNotFoundException : DatabaseException
+    {
+        public ItenNotFoundException(string path)
+            : base($"Item not found: {path}")
+        {
+
+        }
+    }
 }

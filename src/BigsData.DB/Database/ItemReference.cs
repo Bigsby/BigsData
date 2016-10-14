@@ -24,10 +24,10 @@ namespace BigsData.Database
             get
             {
                 return Path.Combine(
-              Constants.DatabasesFolder,
-              Database,
-              Constants.CollectionsFolder,
-              Collection);
+                  Constants.DatabasesFolder,
+                  Database,
+                  Constants.CollectionsFolder,
+                  Collection);
             }
         }
 
@@ -41,11 +41,11 @@ namespace BigsData.Database
             get
             {
                 return
-                  !string.IsNullOrEmpty(Database)
-                  &&
-                  !string.IsNullOrEmpty(Collection)
-                  &&
-                  !string.IsNullOrEmpty(Id);
+                  string.IsNullOrEmpty(Database)
+                  ||
+                  string.IsNullOrEmpty(Collection)
+                  ||
+                  string.IsNullOrEmpty(Id);
             }
         }
 
@@ -56,7 +56,7 @@ namespace BigsData.Database
         }
         internal string RootCollectionPath
         {
-            get { return Path.Combine(Root, Collection); }
+            get { return Path.Combine(Root, CollectionPath); }
         }
     }
 }
