@@ -1,4 +1,5 @@
 ﻿using BigsData.Database;
+using fastJSON;
 using System;
 using System.IO;
 using System.Linq;
@@ -17,7 +18,9 @@ namespace ConsoleTest
 
             //Task.Run(() => TestStream(db)).Wait();
             //Task.Run(() => TestItems(db)).Wait();
-            Task.Run(() => TestDelete(db)).Wait();
+            //Task.Run(() => TestDelete(db)).Wait();
+            //Task.Run(() => TestDifferentTypes(db)).Wait();
+            Task.Run(() => TestGenericType(db)).Wait();
 
             WriteLine("Done!");
 
@@ -83,9 +86,59 @@ namespace ConsoleTest
             foreach (var listItem in db.Query<Item>())
                 WriteLine($"Item: {listItem.Name} - {listItem.Birthday} - {db.GetId(listItem)}");
         }
+
+        private static async Task TestDifferentTypes(BigsDatabase db)
+        {
+            var item = new Item
+            {
+                Name = "John Cleese",
+                Birthday = new DateTime(1939, 10, 27)
+            };
+
+            var result = await db.Add(item);
+
+            WriteLine("Single:");
+            var itemRead = await db.Single<ItemB>(result.ItemId);
+            WriteLine($"Item: {itemRead.Name} - {itemRead.Birthday}");
+
+        }
+
+        private static async Task TestGenericType(BigsDatabase db)
+        {
+            var item = new Item
+            {
+                Name = "John Cleese",
+                Birthday = new DateTime(1939, 10, 27)
+            };
+
+
+            //var json = JSON.ToJSON(item, new JSONParameters { EnableAnonymousTypes = true });
+            //var toObject = JSON.ToObject(json);
+            //var parse = JSON.Parse(json);
+
+            var json = Newtonsoft.Json.JsonConvert.SerializeObject(item);
+            var deserializeObject = Newtonsoft.Json.JsonConvert.DeserializeObject(json);
+            var jo = Newtonsoft.Json.JsonConvert.DeserializeObject<Newtonsoft.Json.Linq.JObject>(json);
+
+            jo.Merge(new
+            {
+                Birthday = new DateTime(1975, 11, 10),
+                NewProperty = "New Property"
+            }, new Newtonsoft.Json.Linq.JsonMergeSettings { MergeArrayHandling = Newtonsoft.Json.Linq.MergeArrayHandling.Merge, MergeNullValueHandling = Newtonsoft.Json.Linq.MergeNullValueHandling.Merge });
+            var newJson = Newtonsoft.Json.JsonConvert.SerializeObject(jo);
+            var stop = "here";
+        }
+
+
     }
 
     public class Item
+    {
+        public string Name { get; set; }
+        public DateTime Birthday { get; set; }
+    }
+
+    public class ItemB
     {
         public string Name { get; set; }
         public DateTime Birthday { get; set; }
