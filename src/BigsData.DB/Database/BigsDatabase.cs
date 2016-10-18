@@ -17,7 +17,7 @@ namespace BigsData.Database
         private readonly bool _failSilently;
         private readonly bool _trackReferences;
         private const string _guidFormat = "N";
-        private static readonly Encoding _encoding = Encoding.UTF8;
+        private static readonly Encoding _encoding = new UTF8Encoding(false);
         private readonly IDictionary<WeakReference, ItemReference> _references;
         #endregion
 

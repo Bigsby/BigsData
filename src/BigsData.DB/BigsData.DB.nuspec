@@ -2,7 +2,7 @@
 <package >
   <metadata>
     <id>BigsData.DB</id>
-    <version>1.0.0.0</version>
+    <version>1.0.1</version>
     <title>BigsData Database</title>
     <authors>Bigsby</authors>
     <owners>Bigsby</owners>
@@ -12,5 +12,6 @@
     <description>A document generic "database".</description>
     <copyright>Copyright 2016 © Bigsby</copyright>
     <tags>Document NoSql Database JSON Document-based Stream</tags>
+	<summary>Target .Net 4.5.2</summary>
   </metadata>
 </package>

@@ -116,7 +116,7 @@ namespace ConsoleTest
             //var toObject = JSON.ToObject(json);
             //var parse = JSON.Parse(json);
 
-            var json = Newtonsoft.Json.JsonConvert.SerializeObject(item);
+            var json = Newtonsoft.Json.JsonConvert.SerializeObject(item, Newtonsoft.Json.Formatting.Indented);
             var deserializeObject = Newtonsoft.Json.JsonConvert.DeserializeObject(json);
             var jo = Newtonsoft.Json.JsonConvert.DeserializeObject<Newtonsoft.Json.Linq.JObject>(json);
 
