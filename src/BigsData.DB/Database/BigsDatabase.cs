@@ -68,16 +68,16 @@ namespace BigsData.Database
                 else
                     throw new ItemNotFoundException(itemReference.FullPath);
 
-            return ReadItem<T>(itemReference);
+            return Task.FromResult(ReadItem<T>(itemReference));
         }
 
-        public IEnumerable<T> Query<T>(string collection = null, string database = null) where T : class, new()
+        public IQueryable<T> Query<T>(string collection = null, string database = null) where T : class, new()
         {
             var reference = BuildItemReference(null, collection, database);
 
             if (!Directory.Exists(reference.RootCollectionPath))
                 if (_failSilently)
-                    return new T[0];
+                    return new T[0].AsQueryable();
 
             return Directory.EnumerateFiles(reference.RootCollectionPath)
                 .Select(file =>
@@ -87,7 +87,7 @@ namespace BigsData.Database
                         reference.Database,
                         reference.Collection,
                         Path.GetFileName(file)
-                    )).Result).Where(item => default(T) != item);
+                    ))).Where(item => default(T) != item).AsQueryable();
         }
 
         public Stream GetSteam(string id, string collection = null, string database = null)
@@ -315,19 +315,14 @@ namespace BigsData.Database
             }
         }
 
-        private async Task<T> ReadItem<T>(ItemReference itemReference) where T : class, new()
+        private T ReadItem<T>(ItemReference itemReference) where T : class, new()
         {
-            using (var fileStream = File.OpenRead(itemReference.RootFullPath))
-            {
-                var bytesRead = new byte[fileStream.Length];
-                await fileStream.ReadAsync(bytesRead, 0, (int)fileStream.Length);
-                var json = _encoding.GetString(bytesRead);
+            var json = File.ReadAllText(itemReference.RootFullPath);
 
-                var result = Serializer.Deserialize<T>(json);
-                if (default(T) != result)
-                    AddReference(result, itemReference);
-                return result;
-            }
+            var result = Serializer.Deserialize<T>(json);
+            if (default(T) != result)
+                AddReference(result, itemReference);
+            return result;
         }
 
         private async Task<OperationResult> UpdateInt<T>(ItemReference itemReference, T item, Func<FileStream, T, Task> process)
